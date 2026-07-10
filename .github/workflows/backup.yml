@@ -1,0 +1,73 @@
+name: Backup diário PostgreSQL
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # 02:00 em Brasília (UTC-3)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BACKUP_DIR: backup-output
+  RCLONE_CONFIG_PATH: ${{ github.workspace }}/rclone.conf
+  GDRIVE_REMOTE: gdrive
+  GDRIVE_FOLDER: UniFlowPeople-Backups
+  RETENTION_DAYS: '30'
+
+jobs:
+  backup:
+    name: Gerar e enviar backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar PostgreSQL Client e rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client rclone
+
+      - name: Restaurar configuração segura do rclone
+        env:
+          RCLONE_CONFIG_BASE64: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+        run: |
+          test -n "$RCLONE_CONFIG_BASE64" || { echo 'Secret RCLONE_CONFIG_BASE64 não configurado.'; exit 1; }
+          printf '%s' "$RCLONE_CONFIG_BASE64" | base64 --decode > "$RCLONE_CONFIG_PATH"
+          chmod 600 "$RCLONE_CONFIG_PATH"
+
+      - name: Executar backup
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+          BACKUP_ENCRYPTION_PASSWORD: ${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}
+        run: bash scripts/backup.sh
+
+      - name: Upload para Google Drive
+        run: |
+          rclone --config "$RCLONE_CONFIG_PATH" copy "$BACKUP_DIR" "$GDRIVE_REMOTE:$GDRIVE_FOLDER" \
+            --include '*.dump.enc' \
+            --checksum \
+            --create-empty-src-dirs \
+            --log-level INFO
+
+      - name: Aplicar retenção no Google Drive
+        run: |
+          rclone --config "$RCLONE_CONFIG_PATH" delete "$GDRIVE_REMOTE:$GDRIVE_FOLDER" \
+            --min-age "${RETENTION_DAYS}d" \
+            --include '*.dump.enc' \
+            --rmdirs \
+            --log-level INFO
+
+      - name: Validar arquivo remoto
+        run: |
+          FILE_NAME="$(find "$BACKUP_DIR" -maxdepth 1 -name '*.dump.enc' -printf '%f\n' | head -n 1)"
+          test -n "$FILE_NAME" || { echo 'Arquivo criptografado não encontrado.'; exit 1; }
+          rclone --config "$RCLONE_CONFIG_PATH" lsf "$GDRIVE_REMOTE:$GDRIVE_FOLDER/$FILE_NAME"
+
+      - name: Limpar dados sensíveis do runner
+        if: always()
+        run: |
+          rm -rf "$BACKUP_DIR"
+          rm -f "$RCLONE_CONFIG_PATH"
