@@ -48,7 +48,7 @@ test -s "$PLAIN_FILE" || {
   exit 1
 }
 
-echo "Criptografando backup com AES-256-GCM compatível via OpenSSL..."
+echo "Criptografando backup com AES-256-CBC, PBKDF2 e SHA-256..."
 openssl enc \
   -aes-256-cbc \
   -salt \
@@ -64,9 +64,6 @@ test -s "$ENCRYPTED_FILE" || {
   echo "Erro: o arquivo criptografado foi criado vazio." >&2
   exit 1
 }
-
-sha256sum "$ENCRYPTED_FILE" > "${ENCRYPTED_FILE}.sha256"
-rm -f "${ENCRYPTED_FILE}.sha256" # checksum é usado apenas na validação local; não expor metadados extras
 
 FILE_SIZE="$(du -h "$ENCRYPTED_FILE" | cut -f1)"
 echo "Backup concluído: $(basename "$ENCRYPTED_FILE") ($FILE_SIZE)"
