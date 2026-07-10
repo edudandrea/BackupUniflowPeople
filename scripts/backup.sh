@@ -18,8 +18,13 @@ require_command() {
 
 require_var DATABASE_PUBLIC_URL
 require_var BACKUP_ENCRYPTION_PASSWORD
-require_command pg_dump
 require_command openssl
+
+PG_DUMP_BIN="${PG_DUMP_BIN:-/usr/lib/postgresql/18/bin/pg_dump}"
+if [[ ! -x "$PG_DUMP_BIN" ]]; then
+  echo "Erro: pg_dump 18 não encontrado em $PG_DUMP_BIN." >&2
+  exit 1
+fi
 
 BACKUP_DIR="${BACKUP_DIR:-backup-output}"
 TIMESTAMP="$(TZ=America/Sao_Paulo date '+%Y-%m-%d_%H-%M-%S')"
@@ -34,8 +39,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+echo "Versão utilizada: $($PG_DUMP_BIN --version)"
 echo "Gerando backup PostgreSQL no formato custom..."
-pg_dump \
+"$PG_DUMP_BIN" \
   --dbname="$DATABASE_PUBLIC_URL" \
   --format=custom \
   --compress=9 \
