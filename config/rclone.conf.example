@@ -1,0 +1,9 @@
+# NÃO coloque tokens reais neste arquivo nem faça commit do rclone.conf.
+# Gere a configuração real executando: rclone config
+# O remote deve se chamar exatamente "gdrive".
+
+[gdrive]
+type = drive
+scope = drive
+# token = { ... gerado pelo rclone ... }
+# team_drive =
