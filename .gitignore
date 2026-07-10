@@ -1,0 +1,7 @@
+backup-output/
+*.dump
+*.dump.enc
+rclone.conf
+.env
+*.log
+.DS_Store
